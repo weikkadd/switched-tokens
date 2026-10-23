@@ -218,7 +218,7 @@ def get_token_count(sb) -> int:
 def earn_with_vylo(sb) -> bool:
     """点击 'Earn with Vylo' 按钮，等待广告完成返回"""
     try:
-        # 先打印页面所有可点击元素的文字（诊断）
+        # 先打印页面所有可点击元素的文字（诊断）+ 完整 body 文本
         page_info = sb.execute_script("""
         (function(){
             var info = [];
@@ -231,11 +231,12 @@ def earn_with_vylo(sb) -> bool:
                     info.push(el.tagName + '[' + (h ? h.substring(0,30) : '') + ']: ' + t.substring(0, 60));
                 }
             }
-            // 如果没找到可点击元素，返回 body 前 500 字符
+            // 始终返回 body 前 500 字符（不管有没有可点击元素）
+            var body = (document.body.innerText || '').substring(0, 500);
             if (info.length === 0) {
-                return 'NO_CLICKABLE: ' + (document.body.innerText || '').substring(0, 500);
+                return 'NO_CLICKABLE | BODY: ' + body;
             }
-            return info.join(' | ');
+            return info.join(' | ') + ' | BODY: ' + body;
         })();
         """)
         log(f"页面可点击元素: {str(page_info)[:300]}")
