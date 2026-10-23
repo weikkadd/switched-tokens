@@ -222,13 +222,18 @@ def earn_with_vylo(sb) -> bool:
         page_info = sb.execute_script("""
         (function(){
             var info = [];
-            var els = document.querySelectorAll('button, a, [role=button], [onclick], [href], [class*="btn"], [class*="button"], [class*="earn"], [class*="vylo"]');
-            for (var i = 0; i < els.length && i < 30; i++) {
+            var els = document.querySelectorAll('button, a, [role=button], [onclick], [href], [class*="btn"], [class*="button"], [class*="earn"], [class*="vylo"], [class*="link"], [class*="unlock"]');
+            for (var i = 0; i < els.length && i < 50; i++) {
                 var el = els[i];
                 var t = (el.innerText || el.textContent || '').trim();
+                var h = el.getAttribute('href') || '';
                 if (t.length > 0 && t.length < 100) {
-                    info.push(el.tagName + ': ' + t.substring(0, 60));
+                    info.push(el.tagName + '[' + (h ? h.substring(0,30) : '') + ']: ' + t.substring(0, 60));
                 }
+            }
+            // 如果没找到可点击元素，返回 body 前 500 字符
+            if (info.length === 0) {
+                return 'NO_CLICKABLE: ' + (document.body.innerText || '').substring(0, 500);
             }
             return info.join(' | ');
         })();
