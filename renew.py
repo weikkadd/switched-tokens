@@ -304,7 +304,18 @@ def run():
         # 2. 导航到 tokens 页面
         sb.open(f"{BASE_URL}/tokens")
         sb.wait_for_ready_state_complete()
-        time.sleep(3)
+        time.sleep(5)
+
+        # 2.5 诊断：打印当前 URL + 页面标题 + body 前 300 字符
+        try:
+            cur_url = sb.get_current_url()
+            cur_title = sb.get_title()
+            body_text = sb.execute_script("return (document.body.innerText || '').substring(0, 300);")
+            log(f"当前 URL: {cur_url}")
+            log(f"页面标题: {cur_title}")
+            log(f"页面内容: {str(body_text)[:200]}")
+        except Exception as e:
+            log_warn(f"页面诊断失败: {e}")
 
         # 3. 获取初始金币数量
         initial_count = get_token_count(sb)
