@@ -260,7 +260,7 @@ def earn_with_vylo(sb) -> bool:
             log(f"切换到广告标签页: {sb.get_current_url()[:80]}")
 
             # 循环点击广告页的继续/获取链接按钮
-            for step in range(30):
+            for step in range(40):
                 time.sleep(2)
                 try:
                     cur_url = sb.get_current_url()
@@ -269,13 +269,34 @@ def earn_with_vylo(sb) -> bool:
                         break
                 except Exception:
                     pass
-                # 找继续/获取链接按钮并点击
+                # 诊断：打印广告页所有按钮/链接 + 页面文本
+                if step == 0:
+                    try:
+                        btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], [onclick], input[type=submit]")
+                        log(f"  广告页元素数: {len(btns)}")
+                        for b in btns[:15]:
+                            try:
+                                bt = b.text.strip()
+                                if bt:
+                                    log(f"    广告页: {b.tag_name}: '{bt[:50]}'")
+                            except:
+                                pass
+                        body = sb.get_text("body")
+                        log(f"  广告页文本前 200: {body[:200]!r}")
+                    except Exception as e:
+                        log_warn(f"  广告页诊断失败: {e}")
+                # 找继续/获取链接按钮并点击（放宽关键词）
                 try:
-                    btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button]")
+                    btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], [onclick], input[type=submit]")
                     for b in btns:
                         try:
                             bt = b.text.strip().lower()
-                            if any(kw in bt for kw in ['continue', 'get link', 'click here', 'proceed', 'go to', 'next', 'i understand', 'skip']):
+                            bv = (b.get_attribute("value") or "").strip().lower()
+                            if any(kw in bt or kw in bv for kw in [
+                                'continue', 'get link', 'click here', 'proceed', 'go to', 'next',
+                                'i understand', 'skip', 'free', 'download', 'access', 'unlock',
+                                'open', 'start', 'verify', 'confirm', 'yes', 'accept', 'agree'
+                            ]):
                                 if b.is_displayed() and b.is_enabled():
                                     b.click()
                                     log(f"  广告页点击: {b.text.strip()[:40]}")
