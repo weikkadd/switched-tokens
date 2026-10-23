@@ -185,109 +185,74 @@ def do_cookie_login(sb) -> bool:
 
 # ======================== 金币获取 ========================
 def get_token_count(sb) -> int:
-    """获取当前已获得的金币数量"""
+    """获取当前已获得的金币数量（用 Selenium 原生 API 代替 JS execute_script）"""
     try:
-        result = sb.execute_script("""
-        (function(){
-            // 策略1: 匹配 'N of M' 格式
-            var all = document.querySelectorAll('*');
-            for (var i = 0; i < all.length; i++) {
-                var t = (all[i].innerText || '').trim();
-                if (t.length > 0 && t.length < 100) {
-                    var m = t.match(/(\\d+)\\s*of\\s*(\\d+)/i);
-                    if (m) return m[1] + '/' + m[2];
-                }
-            }
-            // 策略2: 查找金币相关 class
-            var el = document.querySelector('[class*="token"], [class*="coin"], [class*="balance"], [class*="credit"]');
-            if (el) return 'class:' + el.innerText.trim();
-            // 策略3: 返回页面 body 前 500 字符用于诊断
-            return 'body:' + (document.body.innerText || '').substring(0, 500);
-        })();
-        """)
-        if result and result != '-1':
-            log(f"金币检测: {str(result)[:200]}")
-            m = re.match(r'(\d+)', str(result))
-            if m:
-                return int(m.group(1))
+        body_text = sb.get_text("body")
+        m = re.search(r'(\d+)\s*of\s*(\d+)', body_text)
+        if m:
+            count = int(m.group(1))
+            log(f"当前金币: {count}/{m.group(2)}")
+            return count
+        log(f"金币检测: body 无 'N of M'，前 200 字符: {body_text[:200]}")
         return -1
     except Exception as e:
         log_warn(f"获取金币数量失败: {e}")
         return -1
 
 def earn_with_vylo(sb) -> bool:
-    """点击 'Earn with Vylo' 按钮，等待广告完成返回"""
+    """点击 'Earn with Vylo' 按钮，等待广告完成返回（用 Selenium 原生 API）"""
+    from selenium.webdriver.common.by import By
     try:
-        # 先打印页面所有可点击元素的文字（诊断）+ 完整 body 文本
-        page_info = sb.execute_script("""
-        (function(){
-            var info = [];
-            var els = document.querySelectorAll('button, a, [role=button], [onclick], [href], [class*="btn"], [class*="button"], [class*="earn"], [class*="vylo"], [class*="link"], [class*="unlock"]');
-            for (var i = 0; i < els.length && i < 50; i++) {
-                var el = els[i];
-                var t = (el.innerText || el.textContent || '').trim();
-                var h = el.getAttribute('href') || '';
-                if (t.length > 0 && t.length < 100) {
-                    info.push(el.tagName + '[' + (h ? h.substring(0,30) : '') + ']: ' + t.substring(0, 60));
-                }
-            }
-            // 始终返回 body 前 500 字符（不管有没有可点击元素）
-            var body = (document.body.innerText || '').substring(0, 500);
-            if (info.length === 0) {
-                return 'NO_CLICKABLE | BODY: ' + body;
-            }
-            return info.join(' | ') + ' | BODY: ' + body;
-        })();
-        """)
-        log(f"页面可点击元素: {str(page_info)[:300]}")
+        time.sleep(3)
 
-        # 放宽查找：搜索所有元素含 vylo/earn/get link/unlock/claim
-        result = sb.execute_script("""
-        (function(){
-            var candidates = document.querySelectorAll('button, a, [role=button], [onclick], [href], [class*="btn"], [class*="button"], [class*="earn"], [class*="vylo"], div[onclick], span[onclick]');
-            for (var i = 0; i < candidates.length; i++) {
-                var el = candidates[i];
-                var t = (el.innerText || el.textContent || '').trim().toLowerCase();
-                if (t.indexOf('vylo') !== -1 || t.indexOf('earn') !== -1 ||
-                    t.indexOf('get link') !== -1 || t.indexOf('unlock') !== -1 ||
-                    t.indexOf('claim') !== -1 || t.indexOf('watch') !== -1) {
-                    var rect = el.getBoundingClientRect();
-                    if (rect.width > 0 && rect.height > 0 && !el.disabled) {
-                        el.scrollIntoView({block: 'center'});
-                        el.click();
-                        return 'clicked:' + t.substring(0, 60);
-                    }
-                }
-            }
-            return 'not_found';
-        })();
-        """)
-        if not result or not str(result).startswith("clicked:"):
-            log_warn(f"未找到 'Earn with Vylo' 按钮: {result}")
-            return False
-        log(f"✅ 点击按钮: {result}")
+        # 用 Selenium 原生 find_elements 代替 JS execute_script
+        elements = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], [onclick], [href], [class*='btn'], [class*='button'], [class*='earn'], [class*='vylo'], [class*='link'], [class*='unlock']")
 
-        # 等待广告完成（检测返回 tokens 页面或新标签页关闭）
-        for i in range(AD_WAIT):
-            time.sleep(1)
+        # 打印所有可点击元素（诊断）
+        log(f"找到 {len(elements)} 个可点击元素:")
+        for el in elements[:30]:
             try:
-                url = sb.get_current_url()
-                # 如果返回了 tokens 页面，说明广告完成
-                if "panel.switched.cloud" in url and "/tokens" in url:
-                    log(f"✅ 广告完成，已返回 tokens 页面 ({i}s)")
-                    return True
-                # 如果在 Vylo 广告页，继续等待
-                if i % 15 == 0 and i > 0:
-                    log(f"等待广告完成... ({i}s) URL: {url[:80]}")
-            except Exception:
+                text = el.text.strip()
+                href = el.get_attribute("href") or ""
+                if text and len(text) < 100:
+                    log(f"  {el.tag_name}[{href[:30]}]: '{text[:60]}'")
+            except:
                 pass
 
-        # 超时后尝试手动返回 tokens 页面
-        log_warn(f"广告等待超时 ({AD_WAIT}s)，尝试返回 tokens 页面...")
-        sb.open(f"{BASE_URL}/tokens")
-        sb.wait_for_ready_state_complete()
-        time.sleep(3)
-        return True  # 即使超时也返回 True，让脚本检查金币是否增加
+        # 查找含 vylo/earn/get link/unlock/claim/watch 的按钮
+        for el in elements:
+            try:
+                text = el.text.strip().lower()
+                if any(kw in text for kw in ['vylo', 'earn', 'get link', 'unlock', 'claim', 'watch']):
+                    if el.is_displayed() and el.is_enabled():
+                        el.click()
+                        log(f"✅ 点击按钮: {el.text.strip()[:60]}")
+                        # 等待广告完成
+                        for i in range(AD_WAIT):
+                            time.sleep(1)
+                            url = sb.get_current_url()
+                            if "panel.switched.cloud" in url and "/tokens" in url:
+                                log(f"✅ 广告完成 ({i}s)")
+                                return True
+                            if i % 15 == 0 and i > 0:
+                                log(f"等待广告... ({i}s) URL: {url[:80]}")
+                        # 超时后返回 tokens 页面
+                        log_warn(f"广告等待超时 ({AD_WAIT}s)，返回 tokens 页面...")
+                        sb.open(f"{BASE_URL}/tokens")
+                        sb.wait_for_ready_state_complete()
+                        time.sleep(3)
+                        return True
+            except:
+                pass
+
+        log_warn("未找到 'Earn with Vylo' 按钮")
+        # 打印 body 文本帮助诊断
+        try:
+            body = sb.get_text("body")
+            log(f"页面 body 前 300 字符: {body[:300]}")
+        except:
+            pass
+        return False
 
     except Exception as e:
         log_warn(f"Earn with Vylo 失败: {e}")
