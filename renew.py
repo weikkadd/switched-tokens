@@ -200,59 +200,110 @@ def get_token_count(sb) -> int:
         return -1
 
 def earn_with_vylo(sb) -> bool:
-    """点击 'Earn with Vylo' 按钮，等待广告完成返回（用 Selenium 原生 API）"""
+    """点击 'Earn with Linkvertise' 按钮 → 打开新标签页 → 完成广告 → 返回 +1 token"""
     from selenium.webdriver.common.by import By
     try:
         time.sleep(3)
 
-        # 用 Selenium 原生 find_elements 代替 JS execute_script
-        elements = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], [onclick], [href], [class*='btn'], [class*='button'], [class*='earn'], [class*='vylo'], [class*='link'], [class*='unlock']")
+        # 记录原始标签页
+        try:
+            original_window = sb.driver.current_window_handle
+        except Exception:
+            original_window = None
 
-        # 打印所有可点击元素（诊断）
-        log(f"找到 {len(elements)} 个可点击元素:")
-        for el in elements[:30]:
-            try:
-                text = el.text.strip()
-                href = el.get_attribute("href") or ""
-                if text and len(text) < 100:
-                    log(f"  {el.tag_name}[{href[:30]}]: '{text[:60]}'")
-            except:
-                pass
+        # 用 Selenium 原生 find_elements 找"赚钱"按钮
+        elements = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], [onclick], [href], [class*='earn'], [class*='link'], [class*='unlock'], [class*='claim']")
 
-        # 查找含 vylo/earn/get link/unlock/claim/watch 的按钮
+        # 打印可点击元素（诊断，只打印含 earn/link/unlock/vylo/claim 的）
+        earn_els = []
         for el in elements:
             try:
-                text = el.text.strip().lower()
-                if any(kw in text for kw in ['vylo', 'earn', 'get link', 'unlock', 'claim', 'watch']):
-                    if el.is_displayed() and el.is_enabled():
-                        el.click()
-                        log(f"✅ 点击按钮: {el.text.strip()[:60]}")
-                        # 等待广告完成
-                        for i in range(AD_WAIT):
-                            time.sleep(1)
-                            url = sb.get_current_url()
-                            if "panel.switched.cloud" in url and "/tokens" in url:
-                                log(f"✅ 广告完成 ({i}s)")
-                                return True
-                            if i % 15 == 0 and i > 0:
-                                log(f"等待广告... ({i}s) URL: {url[:80]}")
-                        # 超时后返回 tokens 页面
-                        log_warn(f"广告等待超时 ({AD_WAIT}s)，返回 tokens 页面...")
-                        sb.open(f"{BASE_URL}/tokens")
-                        sb.wait_for_ready_state_complete()
-                        time.sleep(3)
-                        return True
+                text = el.text.strip()
+                tl = text.lower()
+                if text and len(text) < 100:
+                    if any(kw in tl for kw in ['earn', 'link', 'unlock', 'vylo', 'claim', 'watch', 'get link']):
+                        href = el.get_attribute("href") or ""
+                        log(f"  赚钱按钮: {el.tag_name}[{href[:40]}]: '{text[:70]}'")
+                        earn_els.append(el)
             except:
                 pass
 
-        log_warn("未找到 'Earn with Vylo' 按钮")
-        # 打印 body 文本帮助诊断
+        # 点击已找到的赚钱按钮
+        clicked = False
+        for el in earn_els:
+            try:
+                if el.is_displayed() and el.is_enabled():
+                    el.click()
+                    log(f"✅ 点击按钮: {el.text.strip()[:60]}")
+                    clicked = True
+                    break
+            except:
+                pass
+
+        if not clicked:
+            log_warn("未找到 'Earn with Linkvertise/Vylo' 按钮")
+            return False
+
+        # 等待新标签页打开
+        time.sleep(6)
         try:
-            body = sb.get_text("body")
-            log(f"页面 body 前 300 字符: {body[:300]}")
-        except:
-            pass
-        return False
+            handles = sb.driver.window_handles
+        except Exception:
+            handles = []
+        log(f"标签页数量: {len(handles)}")
+
+        # 如果有新标签页，切换过去完成广告
+        if len(handles) > 1 and original_window:
+            new_window = [h for h in handles if h != original_window][0]
+            sb.driver.switch_to.window(new_window)
+            time.sleep(3)
+            log(f"切换到广告标签页: {sb.get_current_url()[:80]}")
+
+            # 循环点击广告页的继续/获取链接按钮
+            for step in range(30):
+                time.sleep(2)
+                try:
+                    cur_url = sb.get_current_url()
+                    if "linkvertise" not in cur_url.lower() and "panel.switched.cloud" in cur_url:
+                        log(f"广告已完成，跳回站点 ({step})")
+                        break
+                except Exception:
+                    pass
+                # 找继续/获取链接按钮并点击
+                try:
+                    btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button]")
+                    for b in btns:
+                        try:
+                            bt = b.text.strip().lower()
+                            if any(kw in bt for kw in ['continue', 'get link', 'click here', 'proceed', 'go to', 'next', 'i understand', 'skip']):
+                                if b.is_displayed() and b.is_enabled():
+                                    b.click()
+                                    log(f"  广告页点击: {b.text.strip()[:40]}")
+                                    break
+                        except:
+                            pass
+                except:
+                    pass
+                if step % 5 == 0 and step > 0:
+                    log(f"  广告页等待... ({step * 2}s) URL: {sb.get_current_url()[:70]}")
+
+            # 关闭广告标签页，切回原标签页
+            try:
+                sb.driver.close()
+            except:
+                pass
+            try:
+                sb.driver.switch_to.window(original_window)
+            except:
+                pass
+            log("已关闭广告标签页，返回 tokens 页面")
+
+        # 等待金币结算，刷新 tokens 页面
+        time.sleep(5)
+        sb.open(f"{BASE_URL}/tokens")
+        sb.wait_for_ready_state_complete()
+        time.sleep(3)
+        return True
 
     except Exception as e:
         log_warn(f"Earn with Vylo 失败: {e}")
