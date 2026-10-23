@@ -185,24 +185,28 @@ def do_cookie_login(sb) -> bool:
 
 # ======================== 金币获取 ========================
 def get_token_count(sb) -> int:
-    """获取当前已获得的金币数量（从 'N of 25 earned today' 提取）"""
+    """获取当前已获得的金币数量"""
     try:
         result = sb.execute_script("""
         (function(){
+            // 策略1: 匹配 'N of M' 格式
             var all = document.querySelectorAll('*');
             for (var i = 0; i < all.length; i++) {
                 var t = (all[i].innerText || '').trim();
-                var m = t.match(/(\\d+)\\s*of\\s*(\\d+)/i);
-                if (m && t.length < 100) return m[1] + '/' + m[2];
+                if (t.length > 0 && t.length < 100) {
+                    var m = t.match(/(\\d+)\\s*of\\s*(\\d+)/i);
+                    if (m) return m[1] + '/' + m[2];
+                }
             }
-            // 备选：查找金币数字
-            var el = document.querySelector('[class*="token"], [class*="coin"], [class*="balance"]');
-            if (el) return el.innerText.trim();
-            return '-1';
+            // 策略2: 查找金币相关 class
+            var el = document.querySelector('[class*="token"], [class*="coin"], [class*="balance"], [class*="credit"]');
+            if (el) return 'class:' + el.innerText.trim();
+            // 策略3: 返回页面 body 前 500 字符用于诊断
+            return 'body:' + (document.body.innerText || '').substring(0, 500);
         })();
         """)
         if result and result != '-1':
-            log(f"当前金币: {result}")
+            log(f"金币检测: {str(result)[:200]}")
             m = re.match(r'(\d+)', str(result))
             if m:
                 return int(m.group(1))
@@ -214,15 +218,33 @@ def get_token_count(sb) -> int:
 def earn_with_vylo(sb) -> bool:
     """点击 'Earn with Vylo' 按钮，等待广告完成返回"""
     try:
-        # 查找 "Earn with Vylo" 按钮并点击
+        # 先打印页面所有可点击元素的文字（诊断）
+        page_info = sb.execute_script("""
+        (function(){
+            var info = [];
+            var els = document.querySelectorAll('button, a, [role=button], [onclick], [href], [class*="btn"], [class*="button"], [class*="earn"], [class*="vylo"]');
+            for (var i = 0; i < els.length && i < 30; i++) {
+                var el = els[i];
+                var t = (el.innerText || el.textContent || '').trim();
+                if (t.length > 0 && t.length < 100) {
+                    info.push(el.tagName + ': ' + t.substring(0, 60));
+                }
+            }
+            return info.join(' | ');
+        })();
+        """)
+        log(f"页面可点击元素: {str(page_info)[:300]}")
+
+        # 放宽查找：搜索所有元素含 vylo/earn/get link/unlock/claim
         result = sb.execute_script("""
         (function(){
-            var candidates = document.querySelectorAll('button, a, [role=button], [onclick]');
+            var candidates = document.querySelectorAll('button, a, [role=button], [onclick], [href], [class*="btn"], [class*="button"], [class*="earn"], [class*="vylo"], div[onclick], span[onclick]');
             for (var i = 0; i < candidates.length; i++) {
                 var el = candidates[i];
-                var t = (el.innerText || el.textContent || '').trim();
-                if (t.toLowerCase().indexOf('vylo') !== -1 || 
-                    (t.toLowerCase().indexOf('earn') !== -1 && t.toLowerCase().indexOf('ad') !== -1)) {
+                var t = (el.innerText || el.textContent || '').trim().toLowerCase();
+                if (t.indexOf('vylo') !== -1 || t.indexOf('earn') !== -1 ||
+                    t.indexOf('get link') !== -1 || t.indexOf('unlock') !== -1 ||
+                    t.indexOf('claim') !== -1 || t.indexOf('watch') !== -1) {
                     var rect = el.getBoundingClientRect();
                     if (rect.width > 0 && rect.height > 0 && !el.disabled) {
                         el.scrollIntoView({block: 'center'});
