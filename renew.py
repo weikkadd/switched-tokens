@@ -285,24 +285,32 @@ def earn_with_vylo(sb) -> bool:
                         log(f"  广告页文本前 200: {body[:200]!r}")
                     except Exception as e:
                         log_warn(f"  广告页诊断失败: {e}")
-                # 找继续/获取链接按钮并点击（放宽关键词）
+                # 按关键词优先级查找并点击（get access 最高优先，避免误点 Get Started）
                 try:
                     btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], [onclick], input[type=submit]")
-                    for b in btns:
-                        try:
-                            bt = b.text.strip().lower()
-                            bv = (b.get_attribute("value") or "").strip().lower()
-                            if any(kw in bt or kw in bv for kw in [
-                                'continue', 'get link', 'click here', 'proceed', 'go to', 'next',
-                                'i understand', 'skip', 'free', 'download', 'access', 'unlock',
-                                'open', 'start', 'verify', 'confirm', 'yes', 'accept', 'agree'
-                            ]):
-                                if b.is_displayed() and b.is_enabled():
-                                    b.click()
-                                    log(f"  广告页点击: {b.text.strip()[:40]}")
-                                    break
-                        except:
-                            pass
+                    priority_keywords = [
+                        'get access',                                    # 最高优先：完成广告
+                        'get link', 'click here',
+                        'continue', 'proceed', 'next', 'open',
+                        'confirm', 'accept', 'agree', 'i understand', 'yes',
+                        'unlock', 'claim', 'watch', 'download', 'free',
+                    ]
+                    clicked = False
+                    for kw in priority_keywords:
+                        if clicked:
+                            break
+                        for b in btns:
+                            try:
+                                bt = b.text.strip().lower()
+                                bv = (b.get_attribute("value") or "").strip().lower()
+                                if kw in bt or kw in bv:
+                                    if b.is_displayed() and b.is_enabled():
+                                        b.click()
+                                        log(f"  广告页点击: {b.text.strip()[:40]}")
+                                        clicked = True
+                                        break
+                            except:
+                                pass
                 except:
                     pass
                 if step % 5 == 0 and step > 0:
