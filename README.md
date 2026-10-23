@@ -21,13 +21,13 @@ git clone https://github.com/weikkadd/switched-tokens.git
 
 仓库 → Settings → Secrets and variables → Actions → New repository secret
 
-| Secret | 必填 | 说明 |
-|--------|------|------|
-| `DISCORD_TOKEN` | 是 | Discord 账号 token（用于 OAuth 登录） |
-| `SWITCHED_COOKIE` | 否 | switched.cloud Cookie（备用，Discord 登录不通时用） |
-| `TG_BOT_TOKEN` | 否 | Telegram bot token（通知用） |
-| `TG_CHAT_ID` | 否 | Telegram chat id（通知用） |
-| `NODE_LINK` | 否 | 代理节点链接（需要代理时填） |
+| Secret | 必填 | 说明 | 示例值 |
+|--------|------|------|--------|
+| `DISCORD_TOKEN` | 是 | Discord 账号 token（用于 OAuth 登录） | `MTY4xxx.G4xCpZ.xxx`（F12→Network→Authorization 头） |
+| `SWITCHED_COOKIE` | 否 | switched.cloud Cookie（备用，Discord 登录不通时用） | `TOKEN=eyJpdiI6xxx; XSRF-TOKEN=eyJpdiI6xxx` |
+| `TG_BOT_TOKEN` | 否 | Telegram bot token（通知用） | `123456789:ABCxxx` |
+| `TG_CHAT_ID` | 否 | Telegram chat id（通知用） | `987654321` |
+| `NODE_LINK` | 否 | 代理节点链接（需要代理时填） | `vless://uuid@1.2.3.4:443?...#节点名` |
 
 ### 3. 获取 DISCORD_TOKEN
 
