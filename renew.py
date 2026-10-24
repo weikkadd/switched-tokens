@@ -231,7 +231,10 @@ def earn_with_vylo(sb) -> bool:
         for el in earn_els:
             try:
                 if el.is_displayed() and el.is_enabled():
-                    el.click()
+                    try:
+                        el.click()
+                    except:
+                        sb.execute_script("arguments[0].click()", el)
                     log(f"✅ 点击: {el.text.strip()[:60]}")
                     clicked = True
                     break
@@ -241,15 +244,40 @@ def earn_with_vylo(sb) -> bool:
             log_warn("未找到 Earn with Vylo 按钮")
             return False
 
-        # 2. 等待新标签页打开（vylo.cc 短链接）
-        time.sleep(6)
+        # 2. 等待新标签页打开（vylo.cc 短链接）或同页面跳转
+        time.sleep(8)
         handles = sb.driver.window_handles
-        if len(handles) <= 1:
-            log_warn("新标签页未打开")
-            return False
-
-        new_window = [h for h in handles if h != original_window][0]
-        sb.driver.switch_to.window(new_window)
+        if len(handles) > 1:
+            new_window = [h for h in handles if h != original_window][0]
+            sb.driver.switch_to.window(new_window)
+        else:
+            # 没有新标签页，检查当前页面是否已跳转到 vylo.cc
+            cur = sb.get_current_url()
+            log(f"无新标签页，当前 URL: {cur[:80]}")
+            if "vylo.cc" in cur or "panel.switched.cloud" not in cur:
+                log("当前页面已跳转，继续处理")
+            else:
+                # 尝试用 JS 强制点击打开
+                log_warn("尝试用 JS 强制点击...")
+                for el in earn_els:
+                    try:
+                        sb.execute_script("arguments[0].click()", el)
+                        time.sleep(5)
+                        handles = sb.driver.window_handles
+                        if len(handles) > 1:
+                            new_window = [h for h in handles if h != original_window][0]
+                            sb.driver.switch_to.window(new_window)
+                            log("JS 点击后新标签页打开")
+                            break
+                        cur = sb.get_current_url()
+                        if "vylo.cc" in cur:
+                            log("JS 点击后跳转到 vylo.cc")
+                            break
+                    except:
+                        pass
+                else:
+                    log_warn("新标签页未打开且未跳转")
+                    return False
         time.sleep(4)
         ad_url = sb.get_current_url()
         log(f"广告页: {ad_url[:80]}")
