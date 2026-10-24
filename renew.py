@@ -512,6 +512,24 @@ def earn_with_vylo(sb) -> bool:
                         break
                 except:
                     pass
+                # 尝试从页面提取 JWT token，直接访问 /wait URL（跳过 Turnstile）
+                if i == 5:
+                    try:
+                        jwt = sb.execute_script("var e=document.querySelector('input[name=\"t\"]');return e?e.value:'';")
+                        if jwt and len(jwt) > 20:
+                            vid = cur_url.rstrip('/').split('/')[-1].split('?')[0]
+                            wait_url = f"https://vylo.cc/{vid}/wait?t={jwt}"
+                            log(f"  提取到 JWT，直接访问 /wait: {wait_url[:70]}")
+                            sb.open(wait_url)
+                            time.sleep(5)
+                            new_cur = sb.get_current_url()
+                            if "/wait" in new_cur:
+                                log(f"✅ 直接跳转到 /wait 成功: {new_cur[:60]}")
+                                break
+                            else:
+                                log(f"  /wait 直接访问失败，URL: {new_cur[:60]}")
+                    except Exception as e:
+                        log(f"  JWT 提取失败: {e}")
                 # 尝试找 Turnstile iframe 并点击
                 try:
                     iframes = sb.find_elements(By.CSS_SELECTOR, "iframe")
@@ -520,7 +538,6 @@ def earn_with_vylo(sb) -> bool:
                             src = ifr.get_attribute("src") or ""
                             if "turnstile" in src or "challenges" in src:
                                 sb.driver.switch_to.frame(ifr)
-                                # 找 checkbox 并点击
                                 cb = sb.find_elements(By.CSS_SELECTOR, "input[type=checkbox], .cb-i, .mark")
                                 for c in cb:
                                     try:
