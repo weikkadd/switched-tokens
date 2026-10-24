@@ -34,10 +34,10 @@ jobs:
         run: |
           wget -qO /tmp/sing-box.tar.gz https://github.com/SagerNet/sing-box/releases/download/v1.11.7/sing-box-1.11.7-linux-amd64.tar.gz
           tar xzf /tmp/sing-box.tar.gz -C /tmp --strip-components=1
-          echo "$NODE_LINK" | base64 -d > /tmp/config.json
+          echo "$NODE_LINK" > /tmp/config.json
           nohup /tmp/sing-box run -c /tmp/config.json > /tmp/sing-box.log 2>&1 &
           sleep 5
-          curl -x socks5h://127.0.0.1:1080 -s https://ifconfig.me > /dev/null && echo "Proxy OK" || echo "Proxy FAIL"
+          curl -x socks5h://127.0.0.1:1080 -s https://ifconfig.me && echo "Proxy OK" || echo "Proxy FAIL"
 
       - name: 运行金币脚本
         env:
