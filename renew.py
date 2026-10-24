@@ -245,10 +245,40 @@ def earn_with_vylo(sb) -> bool:
         new_window = [h for h in handles if h != original_window][0]
         sb.driver.switch_to.window(new_window)
         time.sleep(4)
-        vylo_url = sb.get_current_url()
-        log(f"广告页: {vylo_url[:80]}")
+        ad_url = sb.get_current_url()
+        log(f"广告页: {ad_url[:80]}")
 
-        # 3. 注入 navigator.webdriver = false（确保 PoW 运行）
+        # 3. 如果是 linkvertise.com（非 vylo.cc），先点 "Get access" 等跳转到 vylo.cc
+        if "vylo.cc" not in ad_url:
+            log(f"linkvertise.com 中间页，找 Get access 按钮...")
+            for step in range(30):
+                try:
+                    cur = sb.get_current_url()
+                    if "vylo.cc" in cur:
+                        log(f"✅ 已跳转到 vylo.cc: {cur[:60]}")
+                        break
+                except:
+                    pass
+                try:
+                    btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], input[type=submit]")
+                    for b in btns:
+                        try:
+                            bt = b.text.strip().lower()
+                            if 'get access' in bt or 'get started' in bt or 'continue' in bt:
+                                try:
+                                    b.click()
+                                except:
+                                    sb.execute_script("arguments[0].click()", b)
+                                log(f"  中间页点击: {b.text.strip()[:40]}")
+                                time.sleep(5)
+                                break
+                        except:
+                            pass
+                except:
+                    pass
+                time.sleep(2)
+
+        # 4. 注入 navigator.webdriver = false（确保 PoW 运行）
         try:
             sb.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => false})")
             log("已注入 navigator.webdriver=false")
