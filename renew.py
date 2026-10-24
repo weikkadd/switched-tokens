@@ -323,11 +323,28 @@ def earn_with_vylo(sb) -> bool:
         cur_url = sb.get_current_url()
         log(f"当前广告页: {cur_url[:80]}")
 
-        # 5. vylo.cc/wait 页面：3步验证（Verify→Step2→Get link），循环点按钮
+        # 5. vylo.cc/wait 页面：Continue→弹广告→关闭→Unlock→Continue→...→Get link
         if "vylo.cc" in cur_url:
-            log("vylo.cc 3步验证流程...")
+            log("vylo.cc 验证流程：Continue→广告→Unlock→Continue→广告→Unlock→Get link")
             clicked_history = set()
+            vylo_window = sb.driver.current_window_handle
             for step in range(120):
+                # 先关闭广告标签页（点 Continue 后会弹广告）
+                try:
+                    handles = sb.driver.window_handles
+                    ad_tabs = [h for h in handles if h != original_window and h != vylo_window]
+                    for at in ad_tabs:
+                        try:
+                            sb.driver.switch_to.window(at)
+                            time.sleep(1)
+                            log(f"  关闭广告: {sb.get_current_url()[:50]}")
+                            sb.driver.close()
+                        except:
+                            pass
+                    sb.driver.switch_to.window(vylo_window)
+                except:
+                    pass
+                # 检查是否已跳转离开 vylo.cc
                 try:
                     cur = sb.get_current_url()
                     if "vylo.cc" not in cur and "linkvertise" not in cur.lower():
@@ -335,6 +352,7 @@ def earn_with_vylo(sb) -> bool:
                         break
                 except:
                     pass
+                # 找按钮点击（Continue 优先，然后 Unlock, Get link）
                 try:
                     btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], input[type=submit]")
                     found_btn = False
@@ -345,22 +363,19 @@ def earn_with_vylo(sb) -> bool:
                                 continue
                             if 'try for free' in bt or 'no charge' in bt:
                                 continue
-                            if any(kw in bt for kw in ['unlock', 'continue', 'get link', 'get started',
-                                    'verify', 'next', 'proceed', 'confirm', 'accept', 'go to', 'open']):
-                                if bt in clicked_history and 'continue' not in bt:
+                            # 按钮优先级：continue > get link > unlock > next > proceed
+                            if any(kw in bt for kw in ['continue', 'get link', 'unlock', 'next', 'proceed', 'confirm', 'accept']):
+                                if bt in clicked_history and 'continue' not in bt and 'unlock' not in bt:
                                     continue
                                 try:
                                     b.click()
                                 except:
                                     sb.execute_script("arguments[0].click()", b)
                                 log(f"  vylo({step}): {b.text.strip()[:40]}")
-                                if 'continue' not in bt:
+                                if 'continue' not in bt and 'unlock' not in bt:
                                     clicked_history.add(bt)
                                 found_btn = True
-                                click_count = len(clicked_history) + (1 if 'continue' in bt else 0)
-                                wait_time = [1, 5, 10][min(click_count - 1, 2)] if click_count <= 3 else 5
-                                log(f"  等待 {wait_time} 秒...")
-                                time.sleep(wait_time)
+                                time.sleep(3)
                                 break
                         except:
                             pass
