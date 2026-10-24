@@ -324,13 +324,18 @@ def earn_with_vylo(sb) -> bool:
                                 # 明确跳过订阅推广按钮
                                 if 'try for free' in bt or 'no charge' in bt or '免费试用' in bt:
                                     continue
-                                # 跳过已点过的按钮（避免重复点 Continue 浪费时间）
-                                if "/access/" in cur_url and bt in earn_with_vylo._clicked_history:
+                                # 跳过已点过的按钮（但 Continue 允许多次点）
+                                if "/access/" in cur_url and bt in earn_with_vylo._clicked_history and 'continue' not in bt:
                                     continue
                                 if kw in bt or kw in bv:
-                                    b.click()
+                                    # 用 JavaScript 点击绕过 Selenium ElementNotInteractable
+                                    try:
+                                        b.click()
+                                    except:
+                                        sb.execute_script("arguments[0].click()", b)
                                     log(f"  广告页点击: {b.text.strip()[:40]}")
-                                    earn_with_vylo._clicked_history.add(bt)
+                                    if 'continue' not in bt:
+                                        earn_with_vylo._clicked_history.add(bt)
                                     clicked = True
                                     # 点 Get Started 后等 15 秒倒计时
                                     if 'get started' in bt:
