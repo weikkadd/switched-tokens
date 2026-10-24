@@ -288,88 +288,101 @@ def earn_with_vylo(sb) -> bool:
                     pass
                 time.sleep(2)
 
-        # 4. 注入 navigator.webdriver = false（确保 PoW 运行）
+        # 4. 注入 navigator.webdriver = false
         try:
             sb.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => false})")
             log("已注入 navigator.webdriver=false")
         except:
             pass
 
-        # 4. 等待 PoW 完成（input[name="pw"] 有值）
-        log("等待 PoW 计算...")
-        pw_done = False
-        for i in range(60):
-            try:
-                pw = sb.execute_script("var e=document.querySelector('input[name=\"pw\"]');return e?e.value:'';")
-                if pw and pw.strip():
-                    log(f"✅ PoW 完成: pw={pw[:20]}")
-                    pw_done = True
-                    break
-            except:
-                pass
-            time.sleep(1)
-        if not pw_done:
-            log_warn("PoW 超时（60s），尝试手动计算...")
-            try:
-                proof = sb.execute_script("return document.querySelector('form[data-proof]')?.dataset.proof || '';")
-                bits = int(sb.execute_script("return document.querySelector('form[data-bits]')?.dataset.bits || 16;") or 16)
-                if proof:
-                    import hashlib
-                    n = 0
-                    while n < 5000000:
-                        h = hashlib.sha256(f"{proof}:{n}".encode()).digest()
-                        if int.from_bytes(h[:4], 'big') >> (32 - bits) == 0:
-                            sb.execute_script(f"document.querySelector('input[name=\"pw\"]').value='{n}';")
-                            log(f"✅ Python PoW: n={n}")
-                            pw_done = True
-                            break
-                        n += 1
-            except Exception as e:
-                log_warn(f"Python PoW 失败: {e}")
+        time.sleep(3)
+        cur_url = sb.get_current_url()
+        log(f"当前广告页: {cur_url[:80]}")
 
-        # 5. 等待 Turnstile 完成（button disabled 消失）
-        log("等待 Turnstile...")
-        for i in range(90):
-            try:
-                disabled = sb.execute_script(
-                    "var b=document.querySelector('form#step1 button[type=\"submit\"]');"
-                    "return b?b.disabled:true;")
-                if not disabled:
-                    log(f"✅ Turnstile 完成 ({i}s)")
-                    break
-            except:
-                pass
-            time.sleep(1)
-        else:
-            log_warn("Turnstile 超时（90s）")
-
-        # 6. 关闭广告弹窗（找 close 按钮）
-        try:
-            close_btns = sb.find_elements(By.CSS_SELECTOR, "[data-close-sticky], .ad-close, [aria-label*='lose']")
-            for b in close_btns:
+        # 5. vylo.cc/wait 页面：点 Unlock → 等 Continue → 点 Continue
+        if "vylo.cc" in cur_url:
+            # 点 Unlock 按钮（触发 Turnstile）
+            log("找 Unlock 按钮...")
+            for i in range(10):
                 try:
-                    b.click()
-                    log("已关闭广告弹窗")
+                    btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], input[type=submit]")
+                    for b in btns:
+                        try:
+                            bt = b.text.strip().lower()
+                            if 'unlock' in bt:
+                                try:
+                                    b.click()
+                                except:
+                                    sb.execute_script("arguments[0].click()", b)
+                                log(f"✅ 点击 Unlock")
+                                break
+                        except:
+                            pass
+                except:
+                    pass
+                time.sleep(2)
+
+            # 等 Continue 按钮出现（Turnstile 验证成功）
+            log("等待 Turnstile 验证 + Continue 按钮...")
+            for i in range(90):
+                try:
+                    btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], input[type=submit]")
+                    for b in btns:
+                        try:
+                            bt = b.text.strip().lower()
+                            if 'continue' in bt and b.is_displayed():
+                                try:
+                                    b.click()
+                                except:
+                                    sb.execute_script("arguments[0].click()", b)
+                                log(f"✅ 点击 Continue ({i}s)")
+                                time.sleep(3)
+                                break
+                        except:
+                            pass
+                    else:
+                        time.sleep(1)
+                        continue
                     break
                 except:
                     pass
-        except:
-            pass
+                time.sleep(1)
+            else:
+                log_warn("Continue 按钮超时（90s）")
 
-        # 7. 点击 Continue 按钮（form#step1 submit）
-        time.sleep(2)
-        try:
-            btn = sb.find_element(By.CSS_SELECTOR, 'form#step1 button[type="submit"]')
+        # 6. 如果是 form#step1 页面（有 PoW），走 PoW + Turnstile + Continue
+        elif "form" in sb.execute_script("return document.querySelector('form#step1')?'form':'';") or "":
+            log("检测到 form#step1，走 PoW + Turnstile 流程...")
+            # 等 PoW
+            for i in range(60):
+                try:
+                    pw = sb.execute_script("var e=document.querySelector('input[name=\"pw\"]');return e?e.value:'';")
+                    if pw and pw.strip():
+                        log(f"✅ PoW 完成 ({i}s)")
+                        break
+                except:
+                    pass
+                time.sleep(1)
+            # 等 Turnstile
+            for i in range(90):
+                try:
+                    disabled = sb.execute_script(
+                        "var b=document.querySelector('form#step1 button[type=\"submit\"]');"
+                        "return b?b.disabled:true;")
+                    if not disabled:
+                        log(f"✅ Turnstile 完成 ({i}s)")
+                        break
+                except:
+                    pass
+                time.sleep(1)
+            # 点 Continue
             try:
-                btn.click()
-            except:
-                sb.execute_script("arguments[0].click()", btn)
-            log("✅ 点击 Continue")
-        except Exception as e:
-            log_warn(f"Continue 按钮点击失败: {e}")
-            try:
-                sb.execute_script("document.querySelector('form#step1').requestSubmit();")
-                log("✅ JS requestSubmit")
+                btn = sb.find_element(By.CSS_SELECTOR, 'form#step1 button[type="submit"]')
+                try:
+                    btn.click()
+                except:
+                    sb.execute_script("arguments[0].click()", btn)
+                log("✅ 点击 Continue")
             except:
                 pass
 
