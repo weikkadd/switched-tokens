@@ -267,6 +267,22 @@ def earn_with_vylo(sb) -> bool:
             except:
                 pass
 
+            # 先点击 AGREE 同意 cookie 弹窗（否则可能阻止交互）
+            try:
+                agree_btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button]")
+                for b in agree_btns:
+                    try:
+                        bt = b.text.strip().lower()
+                        if bt == 'agree':
+                            b.click()
+                            log("✅ 点击 AGREE 同意 cookie")
+                            time.sleep(2)
+                            break
+                    except:
+                        pass
+            except:
+                pass
+
             clicked_history = set()
             for step in range(40):
                 # 检测新标签页（Get access 可能打开广告或 vylo.cc）
@@ -300,7 +316,6 @@ def earn_with_vylo(sb) -> bool:
                     if captured:
                         for cap_url in captured:
                             log(f"  拦截到 window.open URL: {cap_url[:80]}")
-                            # 如果捕获到 vylo.cc URL，手动打开
                             if "vylo.cc" in cap_url and len(handles) <= 2:
                                 log(f"  手动打开 vylo.cc: {cap_url[:60]}")
                                 sb.execute_script(f'window.open("{cap_url}", "_blank");')
@@ -321,7 +336,7 @@ def earn_with_vylo(sb) -> bool:
                 except:
                     pass
 
-                # 调试：打印当前页面上所有可见按钮
+                # 调试：打印当前页面按钮 + iframe 信息
                 if step % 5 == 0:
                     try:
                         btns_debug = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button]")
@@ -334,12 +349,36 @@ def earn_with_vylo(sb) -> bool:
                             except:
                                 pass
                         log(f"  调试(step={step}): URL={cur[:50]} | 按钮: {btn_texts[:10]}")
-                        # 检测 iframe
                         iframes = sb.find_elements(By.CSS_SELECTOR, "iframe")
                         log(f"  iframe 数量: {len(iframes)}")
+                        for idx, ifr in enumerate(iframes):
+                            try:
+                                src = ifr.get_attribute("src") or ""
+                                log(f"    iframe[{idx}] src: {src[:60]}")
+                            except:
+                                pass
+                        # 打印 iframe 内按钮
+                        for idx, ifr in enumerate(iframes[:3]):
+                            try:
+                                sb.driver.switch_to.frame(ifr)
+                                ifr_btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button]")
+                                ifr_texts = []
+                                for b in ifr_btns:
+                                    try:
+                                        t = b.text.strip()
+                                        if t and len(t) < 50:
+                                            ifr_texts.append(t)
+                                    except:
+                                        pass
+                                if ifr_texts:
+                                    log(f"    iframe[{idx}] 按钮: {ifr_texts[:10]}")
+                                sb.driver.switch_to.default_content()
+                            except:
+                                sb.driver.switch_to.default_content()
                     except:
                         pass
 
+                # 在主页面找按钮点击
                 try:
                     btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], input[type=submit]")
                     for b in btns:
@@ -361,7 +400,6 @@ def earn_with_vylo(sb) -> bool:
                                     time.sleep(20)
                                 else:
                                     time.sleep(5)
-                                # 点击后检查 window.open 拦截器
                                 try:
                                     captured_after = sb.execute_script("return window.__capturedOpenURLs || [];")
                                     if captured_after:
@@ -373,6 +411,46 @@ def earn_with_vylo(sb) -> bool:
                             pass
                 except:
                     pass
+
+                # 在 iframe 内找按钮点击（广告按钮可能在 iframe 内）
+                found_in_iframe = False
+                try:
+                    iframes = sb.find_elements(By.CSS_SELECTOR, "iframe")
+                    for ifr in iframes:
+                        try:
+                            sb.driver.switch_to.frame(ifr)
+                            iframe_btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], input[type=submit]")
+                            for b in iframe_btns:
+                                try:
+                                    bt = b.text.strip().lower()
+                                    if not bt or bt in clicked_history:
+                                        continue
+                                    if 'try for free' in bt or 'no charge' in bt:
+                                        continue
+                                    if any(kw in bt for kw in ['get access', 'get started', 'continue', 'free access', 'get link', 'proceed', 'next', 'confirm', 'accept', 'skip', 'close']):
+                                        try:
+                                            b.click()
+                                        except:
+                                            sb.execute_script("arguments[0].click()", b)
+                                        log(f"  iframe点击({step}): {b.text.strip()[:40]}")
+                                        clicked_history.add(bt)
+                                        if 'get started' in bt:
+                                            log(f"  等待倒计时 20 秒...")
+                                            time.sleep(20)
+                                        else:
+                                            time.sleep(5)
+                                        found_in_iframe = True
+                                        break
+                                except:
+                                    pass
+                            sb.driver.switch_to.default_content()
+                            if found_in_iframe:
+                                break
+                        except:
+                            sb.driver.switch_to.default_content()
+                except:
+                    sb.driver.switch_to.default_content()
+
                 time.sleep(2)
 
         # 4. 注入 navigator.webdriver = false
