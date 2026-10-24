@@ -42,7 +42,7 @@ jobs:
           MAX_TOKENS: '25'
           AD_WAIT: '120'
           COOLDOWN: '5'
-          IS_PROXY: 'true'
+          IS_PROXY: 'false'
         run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python renew.py
 
       - name: 清理进程和临时文件

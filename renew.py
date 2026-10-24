@@ -200,167 +200,165 @@ def get_token_count(sb) -> int:
         return -1
 
 def earn_with_vylo(sb) -> bool:
-    """点击 'Earn with Linkvertise' 按钮 → 打开新标签页 → 完成广告 → 返回 +1 token"""
+    """点击 'Earn with Vylo' → vylo.cc 新标签页 → PoW+Turnstile+Continue → 金币+2"""
     from selenium.webdriver.common.by import By
     try:
         time.sleep(3)
 
-        # 记录原始标签页
-        try:
-            original_window = sb.driver.current_window_handle
-        except Exception:
-            original_window = None
+        original_window = sb.driver.current_window_handle
 
-        # 用 Selenium 原生 find_elements 找"赚钱"按钮
-        elements = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], [onclick], [href], [class*='earn'], [class*='link'], [class*='unlock'], [class*='claim']")
-
-        # 打印可点击元素（诊断，只打印含 earn/link/unlock/vylo/claim 的）
+        # 1. 找并点击 "Earn with Vylo/Linkvertise" 按钮
+        elements = sb.find_elements(By.CSS_SELECTOR,
+            "button, a, [role=button], [onclick], [href], [class*='earn'], [class*='link'], [class*='unlock'], [class*='claim']")
         earn_els = []
         for el in elements:
             try:
                 text = el.text.strip()
                 tl = text.lower()
                 if text and len(text) < 100:
-                    if any(kw in tl for kw in ['earn', 'link', 'unlock', 'vylo', 'claim', 'watch', 'get link']):
-                        href = el.get_attribute("href") or ""
-                        log(f"  赚钱按钮: {el.tag_name}[{href[:40]}]: '{text[:70]}'")
+                    if any(kw in tl for kw in ['earn', 'vylo', 'linkvertise', 'unlock', 'claim', 'get link', 'watch ad']):
                         earn_els.append(el)
             except:
                 pass
 
-        # 点击已找到的赚钱按钮
         clicked = False
         for el in earn_els:
             try:
                 if el.is_displayed() and el.is_enabled():
                     el.click()
-                    log(f"✅ 点击按钮: {el.text.strip()[:60]}")
+                    log(f"✅ 点击: {el.text.strip()[:60]}")
                     clicked = True
                     break
             except:
                 pass
-
         if not clicked:
-            log_warn("未找到 'Earn with Linkvertise/Vylo' 按钮")
+            log_warn("未找到 Earn with Vylo 按钮")
             return False
 
-        # 等待新标签页打开
+        # 2. 等待新标签页打开（vylo.cc 短链接）
         time.sleep(6)
+        handles = sb.driver.window_handles
+        if len(handles) <= 1:
+            log_warn("新标签页未打开")
+            return False
+
+        new_window = [h for h in handles if h != original_window][0]
+        sb.driver.switch_to.window(new_window)
+        time.sleep(4)
+        vylo_url = sb.get_current_url()
+        log(f"广告页: {vylo_url[:80]}")
+
+        # 3. 注入 navigator.webdriver = false（确保 PoW 运行）
         try:
-            handles = sb.driver.window_handles
-        except Exception:
-            handles = []
-        log(f"标签页数量: {len(handles)}")
+            sb.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => false})")
+            log("已注入 navigator.webdriver=false")
+        except:
+            pass
 
-        # 如果有新标签页，切换过去完成广告
-        if len(handles) > 1 and original_window:
-            new_window = [h for h in handles if h != original_window][0]
-            sb.driver.switch_to.window(new_window)
-            time.sleep(3)
-            log(f"切换到广告标签页: {sb.get_current_url()[:80]}")
-
-            # 循环点击广告页的继续/获取链接按钮
-            for step in range(40):
-                time.sleep(2)
-                try:
-                    cur_url = sb.get_current_url()
-                    if "linkvertise" not in cur_url.lower() and "panel.switched.cloud" in cur_url:
-                        log(f"广告已完成，跳回站点 ({step})")
-                        break
-                except Exception:
-                    pass
-                # 诊断：打印广告页所有按钮/链接 + 页面文本
-                if step == 0:
-                    try:
-                        btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], [onclick], input[type=submit]")
-                        log(f"  广告页元素数: {len(btns)}")
-                        for b in btns[:15]:
-                            try:
-                                bt = b.text.strip()
-                                if bt:
-                                    log(f"    广告页: {b.tag_name}: '{bt[:50]}'")
-                            except:
-                                pass
-                        body = sb.get_text("body")
-                        log(f"  广告页文本前 200: {body[:200]!r}")
-                    except Exception as e:
-                        log_warn(f"  广告页诊断失败: {e}")
-                # 按页面 URL 分类点击：/access/ 页点 Get Started 开始广告；捐赠/GDPR 页点 Get access/CONFIRM
-                try:
-                    btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], [onclick], input[type=submit]")
-                    try:
-                        cur_url = sb.get_current_url().lower()
-                    except:
-                        cur_url = ""
-                    if "/access/" in cur_url:
-                        # /access/ 页：先点 Get Started 开始广告，倒计时后找 Free Access/Get Link
-                        if not hasattr(earn_with_vylo, '_clicked_history'):
-                            earn_with_vylo._clicked_history = set()
-                        # 倒计时后出现的最终按钮优先
-                        keywords = ['free access', 'get link', 'go to', 'open link', 'visit',
-                                    'get started', 'start', 'continue', 'proceed', 'watch', 'play', 'next']
-                    else:
-                        # 捐赠 / GDPR 同意页
-                        keywords = ['get access', 'confirm', 'accept', 'agree', 'i understand', 'yes',
-                                    'get link', 'continue', 'proceed', 'next', 'unlock', 'claim', 'watch', 'download']
-                    # 诊断：每 10 步打印广告页全部按钮
-                    if step % 10 == 0:
-                        log(f"  广告页按钮诊断 (step {step}, URL: {cur_url[:50]}):")
-                        for b in btns[:20]:
-                            try:
-                                bt = b.text.strip()
-                                if bt:
-                                    log(f"    元素: {b.tag_name}: '{bt[:50]}'")
-                            except:
-                                pass
-                    clicked = False
-                    for kw in keywords:
-                        if clicked:
+        # 4. 等待 PoW 完成（input[name="pw"] 有值）
+        log("等待 PoW 计算...")
+        pw_done = False
+        for i in range(60):
+            try:
+                pw = sb.execute_script("var e=document.querySelector('input[name=\"pw\"]');return e?e.value:'';")
+                if pw and pw.strip():
+                    log(f"✅ PoW 完成: pw={pw[:20]}")
+                    pw_done = True
+                    break
+            except:
+                pass
+            time.sleep(1)
+        if not pw_done:
+            log_warn("PoW 超时（60s），尝试手动计算...")
+            try:
+                proof = sb.execute_script("return document.querySelector('form[data-proof]')?.dataset.proof || '';")
+                bits = int(sb.execute_script("return document.querySelector('form[data-bits]')?.dataset.bits || 16;") or 16)
+                if proof:
+                    import hashlib
+                    n = 0
+                    while n < 5000000:
+                        h = hashlib.sha256(f"{proof}:{n}".encode()).digest()
+                        if int.from_bytes(h[:4], 'big') >> (32 - bits) == 0:
+                            sb.execute_script(f"document.querySelector('input[name=\"pw\"]').value='{n}';")
+                            log(f"✅ Python PoW: n={n}")
+                            pw_done = True
                             break
-                        for b in btns:
-                            try:
-                                bt = b.text.strip().lower()
-                                bv = (b.get_attribute("value") or "").strip().lower()
-                                # 明确跳过订阅推广按钮
-                                if 'try for free' in bt or 'no charge' in bt or '免费试用' in bt:
-                                    continue
-                                # 跳过已点过的按钮（但 Continue 允许多次点）
-                                if "/access/" in cur_url and bt in earn_with_vylo._clicked_history and 'continue' not in bt:
-                                    continue
-                                if kw in bt or kw in bv:
-                                    # 用 JavaScript 点击绕过 Selenium ElementNotInteractable
-                                    try:
-                                        b.click()
-                                    except:
-                                        sb.execute_script("arguments[0].click()", b)
-                                    log(f"  广告页点击: {b.text.strip()[:40]}")
-                                    if 'continue' not in bt:
-                                        earn_with_vylo._clicked_history.add(bt)
-                                    clicked = True
-                                    # 点 Get Started 后等 15 秒倒计时
-                                    if 'get started' in bt:
-                                        log(f"  等待倒计时 15 秒...")
-                                        time.sleep(15)
-                                    break
-                            except:
-                                pass
+                        n += 1
+            except Exception as e:
+                log_warn(f"Python PoW 失败: {e}")
+
+        # 5. 等待 Turnstile 完成（button disabled 消失）
+        log("等待 Turnstile...")
+        for i in range(90):
+            try:
+                disabled = sb.execute_script(
+                    "var b=document.querySelector('form#step1 button[type=\"submit\"]');"
+                    "return b?b.disabled:true;")
+                if not disabled:
+                    log(f"✅ Turnstile 完成 ({i}s)")
+                    break
+            except:
+                pass
+            time.sleep(1)
+        else:
+            log_warn("Turnstile 超时（90s）")
+
+        # 6. 关闭广告弹窗（找 close 按钮）
+        try:
+            close_btns = sb.find_elements(By.CSS_SELECTOR, "[data-close-sticky], .ad-close, [aria-label*='lose']")
+            for b in close_btns:
+                try:
+                    b.click()
+                    log("已关闭广告弹窗")
+                    break
                 except:
                     pass
-                if step % 5 == 0 and step > 0:
-                    log(f"  广告页等待... ({step * 2}s) URL: {sb.get_current_url()[:70]}")
+        except:
+            pass
 
-            # 关闭广告标签页，切回原标签页
+        # 7. 点击 Continue 按钮（form#step1 submit）
+        time.sleep(2)
+        try:
+            btn = sb.find_element(By.CSS_SELECTOR, 'form#step1 button[type="submit"]')
             try:
-                sb.driver.close()
+                btn.click()
+            except:
+                sb.execute_script("arguments[0].click()", btn)
+            log("✅ 点击 Continue")
+        except Exception as e:
+            log_warn(f"Continue 按钮点击失败: {e}")
+            try:
+                sb.execute_script("document.querySelector('form#step1').requestSubmit();")
+                log("✅ JS requestSubmit")
             except:
                 pass
+
+        # 8. 等待跳转离开 vylo.cc（最多 30s）
+        log("等待广告跳转...")
+        for i in range(30):
+            time.sleep(2)
             try:
-                sb.driver.switch_to.window(original_window)
+                cur = sb.get_current_url()
+                if "vylo.cc" not in cur and "linkvertise" not in cur.lower():
+                    log(f"✅ 已跳转: {cur[:80]}")
+                    break
             except:
                 pass
-            log("已关闭广告标签页，返回 tokens 页面")
+        else:
+            log_warn(f"未跳转，当前: {sb.get_current_url()[:80]}")
 
-        # 等待金币结算，刷新 tokens 页面
+        # 9. 关闭广告标签页，切回 switched.cloud
+        try:
+            sb.driver.close()
+        except:
+            pass
+        try:
+            sb.driver.switch_to.window(original_window)
+        except:
+            pass
+        log("已返回 switched.cloud")
+
+        # 10. 等待金币结算
         time.sleep(5)
         sb.open(f"{BASE_URL}/tokens")
         sb.wait_for_ready_state_complete()
