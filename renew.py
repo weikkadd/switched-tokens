@@ -252,21 +252,29 @@ def earn_with_vylo(sb) -> bool:
         if "vylo.cc" not in ad_url:
             log(f"linkvertise.com 中间页，找 Get access 按钮...")
             clicked_history = set()
-            for step in range(30):
-                # 检测新标签页（Get access 可能 target=_blank 打开 vylo.cc）
+            for step in range(40):
+                # 检测新标签页（Get access 可能打开广告或 vylo.cc）
                 try:
                     handles = sb.driver.window_handles
                     if len(handles) > 2:
-                        new_w = [h for h in handles if h != original_window and h != new_window]
-                        if new_w:
-                            sb.driver.switch_to.window(new_w[0])
-                            new_window = new_w[0]
-                            time.sleep(3)
-                            cur = sb.get_current_url()
-                            log(f"  切换到新标签页: {cur[:70]}")
-                            if "vylo.cc" in cur:
-                                log(f"✅ 新标签页是 vylo.cc")
-                                break
+                        extra_w = [h for h in handles if h != original_window and h != new_window]
+                        for ew in extra_w:
+                            try:
+                                sb.driver.switch_to.window(ew)
+                                time.sleep(2)
+                                cur = sb.get_current_url()
+                                if "vylo.cc" in cur:
+                                    log(f"✅ 新标签页是 vylo.cc: {cur[:60]}")
+                                    new_window = ew
+                                    break
+                                else:
+                                    log(f"  关闭广告标签页: {cur[:50]}")
+                                    sb.driver.close()
+                                    sb.driver.switch_to.window(new_window)
+                            except:
+                                pass
+                        else:
+                            sb.driver.switch_to.window(new_window)
                 except:
                     pass
                 try:
