@@ -285,19 +285,23 @@ def earn_with_vylo(sb) -> bool:
                         log(f"  广告页文本前 200: {body[:200]!r}")
                     except Exception as e:
                         log_warn(f"  广告页诊断失败: {e}")
-                # 按关键词优先级查找并点击（get access 最高优先，避免误点 Get Started/推广）
+                # 按页面 URL 分类点击：/access/ 页点 Get Started 开始广告；捐赠/GDPR 页点 Get access/CONFIRM
                 try:
                     btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], [onclick], input[type=submit]")
-                    priority_keywords = [
-                        'get access',                                    # 最高优先：完成广告
-                        'get link', 'click here',
-                        'continue', 'proceed', 'next',
-                        'confirm', 'accept', 'agree', 'i understand', 'yes',
-                        'unlock', 'claim', 'watch', 'download',
-                    ]
-                    # 诊断：每 10 步打印广告页全部按钮（看 /access/ 页需要点什么）
+                    try:
+                        cur_url = sb.get_current_url().lower()
+                    except:
+                        cur_url = ""
+                    if "/access/" in cur_url:
+                        # /access/ 页：点 Get Started 开始观看广告
+                        keywords = ['get started', 'start', 'continue', 'proceed', 'watch', 'play', 'next']
+                    else:
+                        # 捐赠 / GDPR 同意页
+                        keywords = ['get access', 'confirm', 'accept', 'agree', 'i understand', 'yes',
+                                    'get link', 'continue', 'proceed', 'next', 'unlock', 'claim', 'watch', 'download']
+                    # 诊断：每 10 步打印广告页全部按钮
                     if step % 10 == 0:
-                        log(f"  广告页按钮诊断 (step {step}, URL: {sb.get_current_url()[:50]}):")
+                        log(f"  广告页按钮诊断 (step {step}, URL: {cur_url[:50]}):")
                         for b in btns[:20]:
                             try:
                                 bt = b.text.strip()
@@ -306,15 +310,18 @@ def earn_with_vylo(sb) -> bool:
                             except:
                                 pass
                     clicked = False
-                    for kw in priority_keywords:
+                    for kw in keywords:
                         if clicked:
                             break
                         for b in btns:
                             try:
                                 bt = b.text.strip().lower()
                                 bv = (b.get_attribute("value") or "").strip().lower()
+                                # 明确跳过订阅推广按钮
+                                if 'try for free' in bt or 'no charge' in bt or '免费试用' in bt:
+                                    continue
                                 if kw in bt or kw in bv:
-                                    if b.is_displayed() and b.is_enabled():
+                                    if b.is_displayed():
                                         b.click()
                                         log(f"  广告页点击: {b.text.strip()[:40]}")
                                         clicked = True
