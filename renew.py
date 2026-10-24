@@ -251,6 +251,7 @@ def earn_with_vylo(sb) -> bool:
         # 3. 如果是 linkvertise.com（非 vylo.cc），先点 "Get access" 等跳转到 vylo.cc
         if "vylo.cc" not in ad_url:
             log(f"linkvertise.com 中间页，找 Get access 按钮...")
+            clicked_history = set()
             for step in range(30):
                 try:
                     cur = sb.get_current_url()
@@ -264,13 +265,22 @@ def earn_with_vylo(sb) -> bool:
                     for b in btns:
                         try:
                             bt = b.text.strip().lower()
-                            if 'get access' in bt or 'get started' in bt or 'continue' in bt:
+                            if not bt or bt in clicked_history:
+                                continue
+                            if 'try for free' in bt or 'no charge' in bt:
+                                continue
+                            if any(kw in bt for kw in ['get access', 'get started', 'continue', 'free access', 'get link', 'proceed', 'next', 'confirm', 'accept']):
                                 try:
                                     b.click()
                                 except:
                                     sb.execute_script("arguments[0].click()", b)
-                                log(f"  中间页点击: {b.text.strip()[:40]}")
-                                time.sleep(5)
+                                log(f"  中间页点击({step}): {b.text.strip()[:40]}")
+                                clicked_history.add(bt)
+                                if 'get started' in bt:
+                                    log(f"  等待倒计时 20 秒...")
+                                    time.sleep(20)
+                                else:
+                                    time.sleep(5)
                                 break
                         except:
                             pass
