@@ -293,8 +293,12 @@ def earn_with_vylo(sb) -> bool:
                     except:
                         cur_url = ""
                     if "/access/" in cur_url:
-                        # /access/ 页：点 Get Started 开始观看广告
-                        keywords = ['get started', 'start', 'continue', 'proceed', 'watch', 'play', 'next']
+                        # /access/ 页：先点 Get Started 开始广告，倒计时后找 Free Access/Get Link
+                        if not hasattr(earn_with_vylo, '_clicked_history'):
+                            earn_with_vylo._clicked_history = set()
+                        # 倒计时后出现的最终按钮优先
+                        keywords = ['free access', 'get link', 'go to', 'open link', 'visit',
+                                    'get started', 'start', 'continue', 'proceed', 'watch', 'play', 'next']
                     else:
                         # 捐赠 / GDPR 同意页
                         keywords = ['get access', 'confirm', 'accept', 'agree', 'i understand', 'yes',
@@ -320,11 +324,19 @@ def earn_with_vylo(sb) -> bool:
                                 # 明确跳过订阅推广按钮
                                 if 'try for free' in bt or 'no charge' in bt or '免费试用' in bt:
                                     continue
+                                # 跳过已点过的按钮（避免重复点 Continue 浪费时间）
+                                if "/access/" in cur_url and bt in earn_with_vylo._clicked_history:
+                                    continue
                                 if kw in bt or kw in bv:
                                     if b.is_displayed():
                                         b.click()
                                         log(f"  广告页点击: {b.text.strip()[:40]}")
+                                        earn_with_vylo._clicked_history.add(bt)
                                         clicked = True
+                                        # 点 Get Started 后等 15 秒倒计时
+                                        if 'get started' in bt:
+                                            log(f"  等待倒计时 15 秒...")
+                                            time.sleep(15)
                                         break
                             except:
                                 pass
