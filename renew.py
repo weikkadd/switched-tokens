@@ -502,6 +502,44 @@ def earn_with_vylo(sb) -> bool:
 
         # 5. vylo.cc/wait 页面：Continue→弹广告→关闭→Unlock→Continue→...→Get link
         if "vylo.cc" in cur_url:
+            # 先等 Cloudflare Turnstile 认证完成并跳转到 /wait 页面
+            log("等待 Cloudflare Turnstile 认证完成...")
+            for i in range(60):
+                try:
+                    cur = sb.get_current_url()
+                    if "/wait" in cur:
+                        log(f"✅ Turnstile 完成，已跳转到 /wait: {cur[:60]}")
+                        break
+                except:
+                    pass
+                # 尝试找 Turnstile iframe 并点击
+                try:
+                    iframes = sb.find_elements(By.CSS_SELECTOR, "iframe")
+                    for ifr in iframes:
+                        try:
+                            src = ifr.get_attribute("src") or ""
+                            if "turnstile" in src or "challenges" in src:
+                                sb.driver.switch_to.frame(ifr)
+                                # 找 checkbox 并点击
+                                cb = sb.find_elements(By.CSS_SELECTOR, "input[type=checkbox], .cb-i, .mark")
+                                for c in cb:
+                                    try:
+                                        c.click()
+                                        log(f"  点击 Turnstile checkbox ({i}s)")
+                                    except:
+                                        pass
+                                sb.driver.switch_to.default_content()
+                        except:
+                            sb.driver.switch_to.default_content()
+                except:
+                    pass
+                if i % 10 == 0:
+                    try:
+                        log(f"  Turnstile 等待({i}s): URL={sb.get_current_url()[:50]}")
+                    except:
+                        pass
+                time.sleep(1)
+            
             log("vylo.cc 验证流程：Continue→广告→Unlock→Continue→广告→Unlock→Get link")
             clicked_history = set()
             vylo_window = sb.driver.current_window_handle
