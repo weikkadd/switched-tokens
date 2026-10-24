@@ -210,16 +210,22 @@ def earn_with_vylo(sb) -> bool:
         # 1. 找并点击 "Earn with Vylo/Linkvertise" 按钮
         elements = sb.find_elements(By.CSS_SELECTOR,
             "button, a, [role=button], [onclick], [href], [class*='earn'], [class*='link'], [class*='unlock'], [class*='claim']")
-        earn_els = []
+        vylo_els = []
+        other_els = []
         for el in elements:
             try:
                 text = el.text.strip()
                 tl = text.lower()
                 if text and len(text) < 100:
-                    if any(kw in tl for kw in ['earn', 'vylo', 'linkvertise', 'unlock', 'claim', 'get link', 'watch ad']):
-                        earn_els.append(el)
+                    if 'vylo' in tl:
+                        vylo_els.append(el)
+                    elif any(kw in tl for kw in ['earn', 'linkvertise', 'unlock', 'claim', 'get link', 'watch ad']):
+                        other_els.append(el)
             except:
                 pass
+
+        earn_els = vylo_els if vylo_els else other_els
+        log(f"找到 {len(vylo_els)} 个 Vylo 按钮, {len(other_els)} 个其他按钮")
 
         clicked = False
         for el in earn_els:
