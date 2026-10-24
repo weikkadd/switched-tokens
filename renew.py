@@ -253,6 +253,22 @@ def earn_with_vylo(sb) -> bool:
             log(f"linkvertise.com 中间页，找 Get access 按钮...")
             clicked_history = set()
             for step in range(30):
+                # 检测新标签页（Get access 可能 target=_blank 打开 vylo.cc）
+                try:
+                    handles = sb.driver.window_handles
+                    if len(handles) > 2:
+                        new_w = [h for h in handles if h != original_window and h != new_window]
+                        if new_w:
+                            sb.driver.switch_to.window(new_w[0])
+                            new_window = new_w[0]
+                            time.sleep(3)
+                            cur = sb.get_current_url()
+                            log(f"  切换到新标签页: {cur[:70]}")
+                            if "vylo.cc" in cur:
+                                log(f"✅ 新标签页是 vylo.cc")
+                                break
+                except:
+                    pass
                 try:
                     cur = sb.get_current_url()
                     if "vylo.cc" in cur:
