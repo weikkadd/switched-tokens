@@ -299,56 +299,48 @@ def earn_with_vylo(sb) -> bool:
         cur_url = sb.get_current_url()
         log(f"当前广告页: {cur_url[:80]}")
 
-        # 5. vylo.cc/wait 页面：点 Unlock → 等 Continue → 点 Continue
+        # 5. vylo.cc/wait 页面：3步验证（Verify→Step2→Get link），循环点按钮
         if "vylo.cc" in cur_url:
-            # 点 Unlock 按钮（触发 Turnstile）
-            log("找 Unlock 按钮...")
-            for i in range(10):
+            log("vylo.cc 3步验证流程...")
+            clicked_history = set()
+            for step in range(120):
+                try:
+                    cur = sb.get_current_url()
+                    if "vylo.cc" not in cur and "linkvertise" not in cur.lower():
+                        log(f"✅ 已跳转: {cur[:80]}")
+                        break
+                except:
+                    pass
                 try:
                     btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], input[type=submit]")
+                    found_btn = False
                     for b in btns:
                         try:
                             bt = b.text.strip().lower()
-                            if 'unlock' in bt:
+                            if not bt or not b.is_displayed():
+                                continue
+                            if 'try for free' in bt or 'no charge' in bt:
+                                continue
+                            if any(kw in bt for kw in ['unlock', 'continue', 'get link', 'get started',
+                                    'verify', 'next', 'proceed', 'confirm', 'accept', 'go to', 'open']):
+                                if bt in clicked_history and 'continue' not in bt:
+                                    continue
                                 try:
                                     b.click()
                                 except:
                                     sb.execute_script("arguments[0].click()", b)
-                                log(f"✅ 点击 Unlock")
+                                log(f"  vylo({step}): {b.text.strip()[:40]}")
+                                if 'continue' not in bt:
+                                    clicked_history.add(bt)
+                                found_btn = True
+                                time.sleep(5)
                                 break
                         except:
                             pass
                 except:
                     pass
-                time.sleep(2)
-
-            # 等 Continue 按钮出现（Turnstile 验证成功）
-            log("等待 Turnstile 验证 + Continue 按钮...")
-            for i in range(90):
-                try:
-                    btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], input[type=submit]")
-                    for b in btns:
-                        try:
-                            bt = b.text.strip().lower()
-                            if 'continue' in bt and b.is_displayed():
-                                try:
-                                    b.click()
-                                except:
-                                    sb.execute_script("arguments[0].click()", b)
-                                log(f"✅ 点击 Continue ({i}s)")
-                                time.sleep(3)
-                                break
-                        except:
-                            pass
-                    else:
-                        time.sleep(1)
-                        continue
-                    break
-                except:
-                    pass
-                time.sleep(1)
-            else:
-                log_warn("Continue 按钮超时（90s）")
+                if not found_btn:
+                    time.sleep(2)
 
         # 6. 如果是 form#step1 页面（有 PoW），走 PoW + Turnstile + Continue
         elif "form" in sb.execute_script("return document.querySelector('form#step1')?'form':'';") or "":
