@@ -357,7 +357,10 @@ def earn_with_vylo(sb) -> bool:
                                 if 'continue' not in bt:
                                     clicked_history.add(bt)
                                 found_btn = True
-                                time.sleep(5)
+                                click_count = len(clicked_history) + (1 if 'continue' in bt else 0)
+                                wait_time = [1, 5, 10][min(click_count - 1, 2)] if click_count <= 3 else 5
+                                log(f"  等待 {wait_time} 秒...")
+                                time.sleep(wait_time)
                                 break
                         except:
                             pass
