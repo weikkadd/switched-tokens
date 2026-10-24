@@ -515,7 +515,27 @@ def earn_with_vylo(sb) -> bool:
                 # 尝试从页面提取 JWT token，直接访问 /wait URL（跳过 Turnstile）
                 if i == 5:
                     try:
-                        jwt = sb.execute_script("var e=document.querySelector('input[name=\"t\"]');return e?e.value:'';")
+                        # 调试：打印页面源码片段和所有 input 元素
+                        html = sb.execute_script("return document.documentElement.outerHTML.substring(0, 2000);")
+                        log(f"  页面源码前500: {str(html)[:500]}")
+                        inputs = sb.find_elements(By.CSS_SELECTOR, "input")
+                        for inp in inputs:
+                            try:
+                                name = inp.get_attribute("name") or ""
+                                val = (inp.get_attribute("value") or "")[:50]
+                                log(f"  input[{name}] = {val}")
+                            except:
+                                pass
+                        # 尝试从 form 或 data 属性提取 JWT
+                        jwt = sb.execute_script("""
+                            var e = document.querySelector('input[name="t"]');
+                            if (e && e.value) return e.value;
+                            var f = document.querySelector('form#step1');
+                            if (f) return f.getAttribute('data-jwt') || '';
+                            var m = document.body.innerHTML.match(/["']t["']\s*:\s*["']([^"']+)["']/);
+                            if (m) return m[1];
+                            return '';
+                        """)
                         if jwt and len(jwt) > 20:
                             vid = cur_url.rstrip('/').split('/')[-1].split('?')[0]
                             wait_url = f"https://vylo.cc/{vid}/wait?t={jwt}"
@@ -528,6 +548,8 @@ def earn_with_vylo(sb) -> bool:
                                 break
                             else:
                                 log(f"  /wait 直接访问失败，URL: {new_cur[:60]}")
+                        else:
+                            log(f"  未找到 JWT token (jwt={str(jwt)[:30]})")
                     except Exception as e:
                         log(f"  JWT 提取失败: {e}")
                 # 尝试找 Turnstile iframe 并点击
