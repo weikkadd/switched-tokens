@@ -384,9 +384,9 @@ def earn_with_vylo(sb) -> bool:
                     for b in btns:
                         try:
                             bt = b.text.strip().lower()
-                            if not bt or bt in clicked_history:
+                            if not bt or (bt in clicked_history and 'continue' not in bt and 'unlock' not in bt):
                                 continue
-                            if 'try for free' in bt or 'no charge' in bt:
+                            if 'try for free' in bt or 'no charge' in bt or 'google' in bt:
                                 continue
                             if any(kw in bt for kw in ['get access', 'get started', 'continue', 'free access', 'get link', 'proceed', 'next', 'confirm', 'accept']):
                                 try:
@@ -394,7 +394,8 @@ def earn_with_vylo(sb) -> bool:
                                 except:
                                     sb.execute_script("arguments[0].click()", b)
                                 log(f"  中间页点击({step}): {b.text.strip()[:40]}")
-                                clicked_history.add(bt)
+                                if 'continue' not in bt and 'unlock' not in bt:
+                                    clicked_history.add(bt)
                                 if 'get started' in bt:
                                     log(f"  等待倒计时 20 秒...")
                                     time.sleep(20)
@@ -423,9 +424,9 @@ def earn_with_vylo(sb) -> bool:
                             for b in iframe_btns:
                                 try:
                                     bt = b.text.strip().lower()
-                                    if not bt or bt in clicked_history:
+                                    if not bt or (bt in clicked_history and 'continue' not in bt and 'unlock' not in bt):
                                         continue
-                                    if 'try for free' in bt or 'no charge' in bt:
+                                    if 'try for free' in bt or 'no charge' in bt or 'google' in bt:
                                         continue
                                     if any(kw in bt for kw in ['get access', 'get started', 'continue', 'free access', 'get link', 'proceed', 'next', 'confirm', 'accept', 'skip', 'close']):
                                         try:
@@ -433,7 +434,8 @@ def earn_with_vylo(sb) -> bool:
                                         except:
                                             sb.execute_script("arguments[0].click()", b)
                                         log(f"  iframe点击({step}): {b.text.strip()[:40]}")
-                                        clicked_history.add(bt)
+                                        if 'continue' not in bt and 'unlock' not in bt:
+                                            clicked_history.add(bt)
                                         if 'get started' in bt:
                                             log(f"  等待倒计时 20 秒...")
                                             time.sleep(20)
