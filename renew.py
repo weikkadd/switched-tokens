@@ -720,7 +720,12 @@ def run():
     log(f"每日上限: {MAX_TOKENS} | 广告等待: {AD_WAIT}s | 间隔: {COOLDOWN}s")
     log("=" * 60)
 
-    with SB(uc=True, headless=False, chromium_arg="--disable-popup-blocking --disable-blink-features=AutomationControlled") as sb:
+    sb_kwargs = dict(uc=True, headless=False, chromium_arg="--disable-popup-blocking --disable-blink-features=AutomationControlled")
+    if IS_PROXY:
+        sb_kwargs["proxy"] = PROXY_SERVER
+        log(f"使用代理: {PROXY_SERVER}")
+
+    with SB(**sb_kwargs) as sb:
         # 用 CDP 在每个新文档加载前注入 navigator.webdriver=undefined（绕过 Turnstile 检测）
         try:
             sb.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
