@@ -328,16 +328,15 @@ def earn_with_vylo(sb) -> bool:
                                 if "/access/" in cur_url and bt in earn_with_vylo._clicked_history:
                                     continue
                                 if kw in bt or kw in bv:
-                                    if b.is_displayed():
-                                        b.click()
-                                        log(f"  广告页点击: {b.text.strip()[:40]}")
-                                        earn_with_vylo._clicked_history.add(bt)
-                                        clicked = True
-                                        # 点 Get Started 后等 15 秒倒计时
-                                        if 'get started' in bt:
-                                            log(f"  等待倒计时 15 秒...")
-                                            time.sleep(15)
-                                        break
+                                    b.click()
+                                    log(f"  广告页点击: {b.text.strip()[:40]}")
+                                    earn_with_vylo._clicked_history.add(bt)
+                                    clicked = True
+                                    # 点 Get Started 后等 15 秒倒计时
+                                    if 'get started' in bt:
+                                        log(f"  等待倒计时 15 秒...")
+                                        time.sleep(15)
+                                    break
                             except:
                                 pass
                 except:
