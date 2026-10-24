@@ -681,7 +681,16 @@ def run():
     log(f"每日上限: {MAX_TOKENS} | 广告等待: {AD_WAIT}s | 间隔: {COOLDOWN}s")
     log("=" * 60)
 
-    with SB(uc=True, headless=False, chromium_arg="--disable-popup-blocking") as sb:
+    with SB(uc=True, headless=False, chromium_arg="--disable-popup-blocking --disable-blink-features=AutomationControlled") as sb:
+        # 用 CDP 在每个新文档加载前注入 navigator.webdriver=undefined（绕过 Turnstile 检测）
+        try:
+            sb.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+                "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            })
+            log("已注入 CDP navigator.webdriver=undefined")
+        except Exception as e:
+            log_warn(f"CDP 注入失败: {e}")
+
         # 1. 登录
         if not do_discord_login(sb):
             log("❌ 登录失败，退出")
