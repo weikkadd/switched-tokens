@@ -285,16 +285,26 @@ def earn_with_vylo(sb) -> bool:
                         log(f"  广告页文本前 200: {body[:200]!r}")
                     except Exception as e:
                         log_warn(f"  广告页诊断失败: {e}")
-                # 按关键词优先级查找并点击（get access 最高优先，避免误点 Get Started）
+                # 按关键词优先级查找并点击（get access 最高优先，避免误点 Get Started/推广）
                 try:
                     btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], [onclick], input[type=submit]")
                     priority_keywords = [
                         'get access',                                    # 最高优先：完成广告
                         'get link', 'click here',
-                        'continue', 'proceed', 'next', 'open',
+                        'continue', 'proceed', 'next',
                         'confirm', 'accept', 'agree', 'i understand', 'yes',
-                        'unlock', 'claim', 'watch', 'download', 'free',
+                        'unlock', 'claim', 'watch', 'download',
                     ]
+                    # 诊断：每 10 步打印广告页全部按钮（看 /access/ 页需要点什么）
+                    if step % 10 == 0:
+                        log(f"  广告页按钮诊断 (step {step}, URL: {sb.get_current_url()[:50]}):")
+                        for b in btns[:20]:
+                            try:
+                                bt = b.text.strip()
+                                if bt:
+                                    log(f"    元素: {b.tag_name}: '{bt[:50]}'")
+                            except:
+                                pass
                     clicked = False
                     for kw in priority_keywords:
                         if clicked:
