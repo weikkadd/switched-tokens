@@ -251,6 +251,22 @@ def earn_with_vylo(sb) -> bool:
         # 3. 如果是 linkvertise.com（非 vylo.cc），先点 "Get access" 等跳转到 vylo.cc
         if "vylo.cc" not in ad_url:
             log(f"linkvertise.com 中间页，找 Get access 按钮...")
+
+            # 注入 window.open 拦截器：捕获广告 URL，即使弹窗被阻止
+            try:
+                sb.execute_script("""
+                    window.__capturedOpenURLs = [];
+                    const origOpen = window.open;
+                    window.open = function(url, target, features) {
+                        if (url) window.__capturedOpenURLs.push(url);
+                        try { return origOpen.call(window, url, target, features); }
+                        catch(e) { return null; }
+                    };
+                """)
+                log("已注入 window.open 拦截器")
+            except:
+                pass
+
             clicked_history = set()
             for step in range(40):
                 # 检测新标签页（Get access 可能打开广告或 vylo.cc）
@@ -277,6 +293,26 @@ def earn_with_vylo(sb) -> bool:
                             sb.driver.switch_to.window(new_window)
                 except:
                     pass
+
+                # 检查 window.open 拦截器是否捕获到广告 URL
+                try:
+                    captured = sb.execute_script("return window.__capturedOpenURLs || [];")
+                    if captured:
+                        for cap_url in captured:
+                            log(f"  拦截到 window.open URL: {cap_url[:80]}")
+                            # 如果捕获到 vylo.cc URL，手动打开
+                            if "vylo.cc" in cap_url and len(handles) <= 2:
+                                log(f"  手动打开 vylo.cc: {cap_url[:60]}")
+                                sb.execute_script(f'window.open("{cap_url}", "_blank");')
+                                time.sleep(4)
+                                handles = sb.driver.window_handles
+                                if len(handles) > 2:
+                                    new_window = [h for h in handles if h != original_window][-1]
+                                    sb.driver.switch_to.window(new_window)
+                                    break
+                except:
+                    pass
+
                 try:
                     cur = sb.get_current_url()
                     if "vylo.cc" in cur:
@@ -284,6 +320,26 @@ def earn_with_vylo(sb) -> bool:
                         break
                 except:
                     pass
+
+                # 调试：打印当前页面上所有可见按钮
+                if step % 5 == 0:
+                    try:
+                        btns_debug = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button]")
+                        btn_texts = []
+                        for b in btns_debug:
+                            try:
+                                t = b.text.strip()
+                                if t and len(t) < 50:
+                                    btn_texts.append(t)
+                            except:
+                                pass
+                        log(f"  调试(step={step}): URL={cur[:50]} | 按钮: {btn_texts[:10]}")
+                        # 检测 iframe
+                        iframes = sb.find_elements(By.CSS_SELECTOR, "iframe")
+                        log(f"  iframe 数量: {len(iframes)}")
+                    except:
+                        pass
+
                 try:
                     btns = sb.find_elements(By.CSS_SELECTOR, "button, a, [role=button], input[type=submit]")
                     for b in btns:
@@ -305,6 +361,13 @@ def earn_with_vylo(sb) -> bool:
                                     time.sleep(20)
                                 else:
                                     time.sleep(5)
+                                # 点击后检查 window.open 拦截器
+                                try:
+                                    captured_after = sb.execute_script("return window.__capturedOpenURLs || [];")
+                                    if captured_after:
+                                        log(f"  点击后拦截到 {len(captured_after)} 个 URL")
+                                except:
+                                    pass
                                 break
                         except:
                             pass
@@ -420,9 +483,12 @@ def earn_with_vylo(sb) -> bool:
             except:
                 pass
 
-        # 8. 等待跳转离开 vylo.cc（最多 30s）
-        log("等待广告跳转...")
-        for i in range(30):
+        # 8. 等待跳转离开 vylo.cc/linkvertise（最多 60s）
+        cur_url = sb.get_current_url()[:80]
+        log(f"等待跳转... 当前: {cur_url}")
+        # 如果从未到达 vylo.cc（还在 linkvertise.com），减少等待时间
+        max_wait = 30 if "vylo.cc" in cur_url else 15
+        for i in range(max_wait):
             time.sleep(2)
             try:
                 cur = sb.get_current_url()
@@ -463,7 +529,7 @@ def run():
     log(f"每日上限: {MAX_TOKENS} | 广告等待: {AD_WAIT}s | 间隔: {COOLDOWN}s")
     log("=" * 60)
 
-    with SB(uc=True, headless=False) as sb:
+    with SB(uc=True, headless=False, chromium_arg="--disable-popup-blocking") as sb:
         # 1. 登录
         if not do_discord_login(sb):
             log("❌ 登录失败，退出")
