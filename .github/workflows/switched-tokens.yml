@@ -28,7 +28,7 @@ jobs:
           seleniumbase install chromedriver
 
       - name: 设置代理
-        if: env.NODE_LINK != ''
+        if: false
         env:
           NODE_LINK: ${{ secrets.NODE_LINK }}
         run: wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh | bash
